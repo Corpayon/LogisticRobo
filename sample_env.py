@@ -19,7 +19,7 @@ class MinimalEnv(Env):
     _PLAYER_FIELD = 1.0
     _VISITED_FIELD = -1.0
 
-    def __init__(self, board_size=(5, 10), food_count=3, hole_count=5):
+    def __init__(self, board_size=(4, 4), food_count=3, hole_count=0):
 
         self.action_space = Discrete(4)
         self.observation_space = Box(-1, 1, shape=board_size)
@@ -172,7 +172,9 @@ def _get_human_input() -> int:
 
 env = MinimalEnv()
 
-model = PPO('MlpPolicy', env, verbose=1, tensorboard_log='runs/').learn(1_000_000)
+
+policy_kwargs = dict(net_arch=[128, 128])
+model = PPO('MlpPolicy', env, verbose=0, policy_kwargs=policy_kwargs, tensorboard_log='runs/').learn(1_000_000)
 
 obs = env.reset()
 while True:
