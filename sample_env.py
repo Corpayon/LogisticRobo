@@ -19,10 +19,10 @@ class MinimalEnv(Env):
     _PLAYER_FIELD = 1.0
     _VISITED_FIELD = -1.0
 
-    def __init__(self, board_size=(4, 4), food_count=3, hole_count=0):
+    def __init__(self, board_size=(5, 10), food_count=6, hole_count=4):
 
         self.action_space = Discrete(4)
-        self.observation_space = Box(-1, 1, shape=board_size)
+        self.observation_space = Box(-1, 1, shape=(board_size[0], board_size[1], 5))
 
         self.board_size = board_size
         self.food_count = food_count
@@ -41,7 +41,7 @@ class MinimalEnv(Env):
         reward, done = self._move_player(direction)
         info = {}
 
-        return self.game_board, reward, done, info
+        return self._get_network_input(), reward, done, info
 
     def reset(self):
         self.game_board = np.zeros(self.board_size)
@@ -64,7 +64,7 @@ class MinimalEnv(Env):
             if self._get_field(x, y) == 0:
                 self._set_field(x, y, self._HOLE_FIELD)
 
-        return self.game_board
+        return self._get_network_input()
 
     def render(self, mode='human'):
         print(f"Board: {self._get_player_position()}")
@@ -92,7 +92,7 @@ class MinimalEnv(Env):
         field_value = self._get_field(current_pos[0], current_pos[1])
 
         # Moving the player to the new field
-        self._set_field(old_pos[0], old_pos[1], self._EMPTY_FIELD)
+        self._set_field(old_pos[0], old_pos[1], self._VISITED_FIELD)
         self._set_field(current_pos[0], current_pos[1], self._PLAYER_FIELD)
 
         # Checking if we landed on food or a hole
@@ -101,14 +101,15 @@ class MinimalEnv(Env):
 
         # Extra reward if the player found all food
         if self._check_if_done():
-            return (0, True)
+            return (100, True)
 
+        # TODO: Kill agent if on the same field (n) times, add this to network input
         if tuple(current_pos) not in self.visited_fields:
             self._set_field(old_pos[0], old_pos[1], self._VISITED_FIELD)
             self.visited_fields.append(tuple(current_pos))
             return (1, False)
         
-        return (0, False)
+        return (-1, False)
 
     def _get_player_position(self) -> Tuple[int, int]:
         coords = np.where(self.game_board == self._PLAYER_FIELD)
@@ -122,6 +123,24 @@ class MinimalEnv(Env):
 
     def _get_field(self, x, y):
         return self.game_board[x][y]
+
+    def _get_network_input(self):
+
+        network_input = []
+
+        for col in self.game_board:
+            network_row = []
+            for row in col:
+                curr = []
+                curr += [1] if row == self._EMPTY_FIELD else [0]
+                curr += [1] if row == self._PLAYER_FIELD else [0]
+                curr += [1] if row == self._FOOD_FIELD else [0]
+                curr += [1] if row == self._HOLE_FIELD else [0]
+                curr += [1] if row == self._VISITED_FIELD else [0]
+                network_row.append(curr)
+            network_input.append(network_row)
+
+        return network_input
 
     def _number_to_symbol(self, number):
         if number == self._EMPTY_FIELD: return " "
@@ -174,44 +193,27 @@ env = MinimalEnv()
 
 
 policy_kwargs = dict(net_arch=[128, 128])
-model = PPO('MlpPolicy', env, verbose=0, policy_kwargs=policy_kwargs, tensorboard_log='runs/').learn(1_000_000)
+model = PPO('MlpPolicy', env, verbose=0, policy_kwargs=policy_kwargs, tensorboard_log='runs/').learn(3_000_000)
 
-obs = env.reset()
-while True:
+for eval_episode in range(3):
 
-    action, _states = model.predict(obs, deterministic=True)
-    obs, reward, done, info = env.step(action)
-    env.render()
-    if done:
-        break
+    print(f"\n\n\n\nEpisode: {eval_episode}")
 
-env.close()
-
-print("Done!")
-
-sys.exit(0)
-for episode in range(1, 2):
-
-    print(f"\n\nEpisode: {episode}")
+    total_reward = 0
 
     obs = env.reset()
-    env.render()
-    print(f"Initial Observation: {obs}")
+    while True:
 
-    steps = 0
+        action, _states = model.predict(obs, deterministic=True)
+        obs, reward, done, info = env.step(action)
 
-    done = False
-    while not done:
+        total_reward += reward
 
-        random_action = env.action_space.sample()
-        print(f"Action: {random_action}")
-
-        obs, reward, done, info = env.step(random_action)
         env.render()
+        if done:
+            break
 
-        print(f"{obs=} {reward=} {done=}")
+        env.close()
+    print(f"Reward: {total_reward}")
 
-
-        steps += 1
-        if steps > 5: break
-        
+print("Done!")
