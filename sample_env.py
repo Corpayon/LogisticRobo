@@ -17,11 +17,12 @@ class MinimalEnv(Env):
     _FOOD_FIELD = 0.3
     _HOLE_FIELD = 0.5
     _PLAYER_FIELD = 1.0
+    _VISITED_FIELD = -1.0
 
     def __init__(self, board_size=(5, 10), food_count=3, hole_count=5):
 
         self.action_space = Discrete(4)
-        self.observation_space = Box(0, 1, shape=board_size)
+        self.observation_space = Box(-1, 1, shape=board_size)
 
         self.board_size = board_size
         self.food_count = food_count
@@ -44,6 +45,8 @@ class MinimalEnv(Env):
 
     def reset(self):
         self.game_board = np.zeros(self.board_size)
+
+        self.visited_fields = [(0, 0)]
 
         self._set_field(0, 0, self._PLAYER_FIELD)
 
@@ -93,13 +96,18 @@ class MinimalEnv(Env):
         self._set_field(current_pos[0], current_pos[1], self._PLAYER_FIELD)
 
         # Checking if we landed on food or a hole
-        if field_value == self._FOOD_FIELD: return (1, False)
+        if field_value == self._FOOD_FIELD: return (25, False)
         if field_value == self._HOLE_FIELD: return (0, True)
 
         # Extra reward if the player found all food
         if self._check_if_done():
-            return (10, True)
+            return (0, True)
 
+        if tuple(current_pos) not in self.visited_fields:
+            self._set_field(old_pos[0], old_pos[1], self._VISITED_FIELD)
+            self.visited_fields.append(tuple(current_pos))
+            return (1, False)
+        
         return (0, False)
 
     def _get_player_position(self) -> Tuple[int, int]:
@@ -120,6 +128,7 @@ class MinimalEnv(Env):
         if number == self._PLAYER_FIELD: return "X"
         if number == self._FOOD_FIELD: return "F"
         if number == self._HOLE_FIELD: return "O"
+        if number == self._VISITED_FIELD: return "V"
 
 def human_game_loop():
     env = MinimalEnv()
@@ -134,31 +143,32 @@ def human_game_loop():
 
         obs, reward, done, info = env.step(action)
         env.render()
+        print(f"Reward: {reward}")
 
     
-def _get_human_input() -> directions.Direction:
+def _get_human_input() -> int:
     action = None
     while action is None:
         choice = input("Enter direction: [0] -> UP, [1] -> LEFT, [2] -> DOWN, [3] -> RIGHT: ")
 
         # Mapping numbers to directions
         if choice in ["0", "1", "2", "3"]:
-            if choice == "0": action = directions.Direction.UP
-            if choice == "1": action = directions.Direction.LEFT
-            if choice == "2": action = directions.Direction.DOWN
-            if choice == "3": action = directions.Direction.RIGHT
+            if choice == "0": action = 0
+            if choice == "1": action = 1
+            if choice == "2": action = 2
+            if choice == "3": action = 3
 
         # Allowing names of directions as input
         if choice.upper() in ["UP", "LEFT", "DOWN", "RIGHT"]:
-            if choice.upper() == "UP": action = directions.Direction.UP
-            if choice.upper() == "LEFT": action = directions.Direction.LEFT
-            if choice.upper() == "DOWN": action = directions.Direction.DOWN
-            if choice.upper() == "RIGHT": action = directions.Direction.RIGHT
+            if choice.upper() == "UP": action = 0
+            if choice.upper() == "LEFT": action = 1
+            if choice.upper() == "DOWN": action = 2
+            if choice.upper() == "RIGHT": action = 3
 
-    return action.value
+    return action
 
-# human_game_loop()
-
+#human_game_loop()
+#sys.exit()
 
 env = MinimalEnv()
 
