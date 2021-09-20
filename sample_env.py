@@ -8,7 +8,7 @@ from typing import Tuple
 import numpy as np
 from gym import Env
 from gym.spaces import Discrete, Box
-
+from stable_baselines3 import PPO
 import directions
 
 class MinimalEnv(Env):
@@ -70,8 +70,6 @@ class MinimalEnv(Env):
     def _move_player(self, direction: directions.Direction) -> Tuple[int, bool]:
         """Moves the player, returns true if the player died"""
 
-        print("Moving player")
-
         old_pos = self._get_player_position()
 
         # Getting the new position of the player
@@ -98,6 +96,10 @@ class MinimalEnv(Env):
         if field_value == self._FOOD_FIELD: return (1, False)
         if field_value == self._HOLE_FIELD: return (0, True)
 
+        # Extra reward if the player found all food
+        if self._check_if_done():
+            return (10, True)
+
         return (0, False)
 
     def _get_player_position(self) -> Tuple[int, int]:
@@ -105,7 +107,7 @@ class MinimalEnv(Env):
         return [coords[0][0], coords[1][0]]
 
     def _check_if_done(self):
-        return np.all(self.game_board != self._PLAYER_FIELD)
+        return np.all(self.game_board != self._FOOD_FIELD)
 
     def _set_field(self, x, y, value):
         self.game_board[x][y] = value
@@ -153,13 +155,29 @@ def _get_human_input() -> directions.Direction:
             if choice.upper() == "DOWN": action = directions.Direction.DOWN
             if choice.upper() == "RIGHT": action = directions.Direction.RIGHT
 
-    return action
+    return action.value
 
 # human_game_loop()
 
 
 env = MinimalEnv()
 
+model = PPO('MlpPolicy', env, verbose=1, tensorboard_log='runs/').learn(1_000_000)
+
+obs = env.reset()
+while True:
+
+    action, _states = model.predict(obs, deterministic=True)
+    obs, reward, done, info = env.step(action)
+    env.render()
+    if done:
+        break
+
+env.close()
+
+print("Done!")
+
+sys.exit(0)
 for episode in range(1, 2):
 
     print(f"\n\nEpisode: {episode}")
